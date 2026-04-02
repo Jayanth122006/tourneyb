@@ -25,21 +25,18 @@ public class MatchService {
     private final SquadRepository squadRepository;
     private final JavaMailSender mailSender;
 
-    public Match updateMatch(Long id, Match updatedMatch) {
-        System.out.println("DEBUG: Update Match API called for ID: " + id);
-        System.out.println("DEBUG: Received Payload -> Room: " + updatedMatch.getRoomId() + ", Pass: " + updatedMatch.getPassword() + ", Date: " + updatedMatch.getMatchDate() + ", Time: " + updatedMatch.getMatchTime());
-
+    public Match updateMatch(Long id, com.example.back.dto.MatchDTO dto) {
+        System.out.println("DEBUG ROOT: Service processing DTO for ID " + id);
         Match match = matchRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Match not found with ID: " + id));
         
-        // Manually map fields to ensure no null-overwrite or Jackson mismatch
-        if (updatedMatch.getRoomId() != null) match.setRoomId(updatedMatch.getRoomId());
-        if (updatedMatch.getPassword() != null) match.setPassword(updatedMatch.getPassword());
-        if (updatedMatch.getMatchDate() != null) match.setMatchDate(updatedMatch.getMatchDate());
-        if (updatedMatch.getMatchTime() != null) match.setMatchTime(updatedMatch.getMatchTime());
+        if (dto.getRoomId() != null) match.setRoomId(dto.getRoomId());
+        if (dto.getPassword() != null) match.setPassword(dto.getPassword());
+        if (dto.getMatchDate() != null) match.setMatchDate(dto.getMatchDate());
+        if (dto.getMatchTime() != null) match.setMatchTime(dto.getMatchTime());
         
         Match saved = matchRepository.saveAndFlush(match);
-        System.out.println("DEBUG: Successfully saved to DB. Verified RoomId: " + saved.getRoomId());
+        System.out.println("DEBUG ROOT: Persistent Save Complete. RoomId in DB is now: " + saved.getRoomId());
         return saved;
     }
 

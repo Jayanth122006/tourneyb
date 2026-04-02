@@ -2,6 +2,7 @@ package com.example.back.controller;
 
 import com.example.back.entity.Match;
 import com.example.back.service.MatchService;
+import com.example.back.dto.MatchDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -23,9 +24,10 @@ public class MatchController {
     }
 
     @PostMapping("/update/{id}")
-    public ResponseEntity<?> updateMatch(@PathVariable Long id, @RequestBody Match match) {
+    public ResponseEntity<?> updateMatch(@PathVariable Long id, @RequestBody MatchDTO dto) {
         try {
-            return ResponseEntity.ok(matchService.updateMatch(id, match));
+            System.out.println("DEBUG ROOT: Controller received DTO -> Room=" + dto.getRoomId() + ", Pass=" + dto.getPassword());
+            return ResponseEntity.ok(matchService.updateMatch(id, dto));
         } catch (Exception e) {
             return ResponseEntity.status(400).body(Map.of("message", e.getMessage()));
         }
