@@ -5,6 +5,8 @@ import com.example.back.entity.Squad;
 import com.example.back.repository.MatchRepository;
 import com.example.back.repository.SquadRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -19,6 +21,72 @@ public class MatchService {
 
     private final MatchRepository matchRepository;
     private final SquadRepository squadRepository;
+    private final JavaMailSender mailSender;
+
+    public Match updateMatch(Long id, Match updatedMatch) {
+        Match match = matchRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Match not found"));
+        
+        match.setRoomId(updatedMatch.getRoomId());
+        match.setPassword(updatedMatch.getPassword());
+        match.setMatchDate(updatedMatch.getMatchDate());
+        match.setMatchTime(updatedMatch.getMatchTime());
+        
+        return matchRepository.save(match);
+    }
+
+    public void sendMatchEmail(Long id) {
+        Match match = matchRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Match not found"));
+
+        if (match.getRoomId() == null || match.getPassword() == null || 
+            match.getMatchDate() == null || match.getMatchTime() == null) {
+            throw new RuntimeException("Match details are incomplete.");
+        }
+
+        List<String> recipients = new ArrayList<>();
+        
+        Squad s1 = squadRepository.findBySquadName(match.getSquad1());
+        if (s1 != null) recipients.add(s1.getEmail());
+        
+        if (!"BYE".equals(match.getSquad2())) {
+            Squad s2 = squadRepository.findBySquadName(match.getSquad2());
+            if (s2 != null) recipients.add(s2.getEmail());
+        }
+
+        if (recipients.isEmpty()) {
+            throw new RuntimeException("No valid emails found for squads.");
+        }
+
+        for (String email : recipients) {
+            String opponent = email.equals(s1 != null ? s1.getEmail() : "") ? match.getSquad2() : match.getSquad1();
+            sendEmail(email, opponent, match);
+        }
+
+        match.setIsSent(true);
+        matchRepository.save(match);
+    }
+
+    private void sendEmail(String to, String opponent, Match match) {
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom("Tourney Livid <noreply@tourneylivid.com>");
+        message.setTo(to);
+        message.setSubject("🔥 Match Details - Tourney Livid");
+        
+        String text = String.format(
+            "Opponent: %s\n" +
+            "Room ID: %s\n" +
+            "Password: %s\n\n" +
+            "Date: %s\n" +
+            "Time: %s\n\n" +
+            "All the best 🎮",
+            opponent, match.getRoomId(), match.getPassword(), 
+            match.getMatchDate(), match.getMatchTime()
+        );
+        
+        message.setText(text);
+        mailSender.send(message);
+    }
 
     public List<Match> generateMatches() {
         // Clear existing matches before generating new ones (Efficient re-shuffle)

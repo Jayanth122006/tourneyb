@@ -29,6 +29,14 @@ public class Match {
     @Column(nullable = false)
     private String squad2;
 
+    private String roomId;
+    private String password;
+    private String matchDate;
+    private String matchTime;
+
+    @Column(nullable = false)
+    private Boolean isSent = false;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
