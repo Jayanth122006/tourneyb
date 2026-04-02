@@ -43,9 +43,11 @@ public class Match {
     @Column(name = "match_time_str")
     private String matchTime;
 
+    @Builder.Default
     private boolean sent = false;
 
     @Column(nullable = false)
-    private LocalDateTime createdAt;
+    @Builder.Default
+    private LocalDateTime createdAt = LocalDateTime.now();
 
 }

@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/matches")
@@ -22,16 +23,23 @@ public class MatchController {
     }
 
     @PostMapping("/update/{id}")
-    public ResponseEntity<Match> updateMatch(@PathVariable Long id, @RequestBody Match match) {
-        return ResponseEntity.ok(matchService.updateMatch(id, match));
+    public ResponseEntity<?> updateMatch(@PathVariable Long id, @RequestBody Match match) {
+        try {
+            return ResponseEntity.ok(matchService.updateMatch(id, match));
+        } catch (Exception e) {
+            return ResponseEntity.status(400).body(Map.of("message", e.getMessage()));
+        }
     }
 
     @PostMapping("/send/{id}")
-    public ResponseEntity<Void> sendMatchEmail(@PathVariable Long id) {
-        matchService.sendMatchEmail(id);
-        return ResponseEntity.ok().build();
+    public ResponseEntity<?> sendMatchEmail(@PathVariable Long id) {
+        try {
+            matchService.sendMatchEmail(id);
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            return ResponseEntity.status(400).body(Map.of("message", e.getMessage()));
+        }
     }
-
 
 
     @DeleteMapping("/{id}")
@@ -47,7 +55,11 @@ public class MatchController {
     }
 
     @GetMapping
-    public ResponseEntity<List<Match>> getAllMatches() {
-        return ResponseEntity.ok(matchService.getAllMatches());
+    public ResponseEntity<?> getAllMatches() {
+        try {
+            return ResponseEntity.ok(matchService.getAllMatches());
+        } catch (Exception e) {
+            return ResponseEntity.status(400).body(Map.of("message", e.getMessage()));
+        }
     }
 }

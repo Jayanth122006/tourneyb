@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -23,6 +24,7 @@ public class MatchService {
     private final SquadRepository squadRepository;
     private final JavaMailSender mailSender;
 
+    @Transactional
     public Match updateMatch(Long id, Match updatedMatch) {
         Match match = matchRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Match not found"));
@@ -35,6 +37,7 @@ public class MatchService {
         return matchRepository.save(match);
     }
 
+    @Transactional
     public void sendMatchEmail(Long id) {
         Match match = matchRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Match not found"));
@@ -69,7 +72,6 @@ public class MatchService {
 
     private void sendEmail(String to, String opponent, Match match) {
         SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom("Tourney Livid <noreply@tourneylivid.com>");
         message.setTo(to);
         message.setSubject("🔥 Match Details - Tourney Livid");
         
