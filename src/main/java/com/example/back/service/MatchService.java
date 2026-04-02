@@ -7,6 +7,7 @@ import com.example.back.repository.SquadRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,13 +19,13 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class MatchService {
 
     private final MatchRepository matchRepository;
     private final SquadRepository squadRepository;
     private final JavaMailSender mailSender;
 
-    @Transactional
     public Match updateMatch(Long id, Match updatedMatch) {
         Match match = matchRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Match not found"));
@@ -37,7 +38,7 @@ public class MatchService {
         return matchRepository.save(match);
     }
 
-    @Transactional
+    @Async
     public void sendMatchEmail(Long id) {
         Match match = matchRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Match not found"));
