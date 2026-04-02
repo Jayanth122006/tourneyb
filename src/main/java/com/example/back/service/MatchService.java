@@ -7,7 +7,6 @@ import com.example.back.repository.SquadRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,22 +29,24 @@ public class MatchService {
         Match match = matchRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Match not found"));
         
+        System.out.println("LOG: Saving Match Data -> Room: " + updatedMatch.getRoomId() + ", Pass: " + updatedMatch.getPassword());
+        
         match.setRoomId(updatedMatch.getRoomId());
         match.setPassword(updatedMatch.getPassword());
         match.setMatchDate(updatedMatch.getMatchDate());
         match.setMatchTime(updatedMatch.getMatchTime());
         
-        return matchRepository.save(match);
+        // saveAndFlush ensures the database is physically updated before we sync back
+        return matchRepository.saveAndFlush(match);
     }
 
-    @Async
     public void sendMatchEmail(Long id) {
         Match match = matchRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Match not found"));
 
         if (match.getRoomId() == null || match.getPassword() == null || 
             match.getMatchDate() == null || match.getMatchTime() == null) {
-            throw new RuntimeException("Match details are incomplete.");
+            throw new RuntimeException("Match details are incomplete. Please fill and Save first.");
         }
 
         List<String> recipients = new ArrayList<>();
@@ -62,13 +63,18 @@ public class MatchService {
             throw new RuntimeException("No valid emails found for squads.");
         }
 
-        for (String email : recipients) {
-            String opponent = email.equals(s1 != null ? s1.getEmail() : "") ? match.getSquad2() : match.getSquad1();
-            sendEmail(email, opponent, match);
+        try {
+            for (String email : recipients) {
+                String opponent = email.equals(s1 != null ? s1.getEmail() : "") ? match.getSquad2() : match.getSquad1();
+                sendEmail(email, opponent, match);
+            }
+            match.setSent(true);
+            matchRepository.saveAndFlush(match);
+            System.out.println("EMAIL SENT SUCCESS");
+        } catch (Exception e) {
+            System.err.println("EMAIL FAILED: " + e.getMessage());
+            throw new RuntimeException("Mail server error: " + e.getMessage());
         }
-
-        match.setSent(true);
-        matchRepository.save(match);
     }
 
     private void sendEmail(String to, String opponent, Match match) {
