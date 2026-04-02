@@ -75,25 +75,20 @@ public class MatchService {
         }
 
         try {
-            for (int i = 0; i < recipients.size(); i++) {
-                String email = recipients.get(i);
-                
-                // Add a small delay between emails to respect Mailtrap's free rate-limit (1 email/sec)
-                if (i > 0) Thread.sleep(1100); 
-
-                String opponent = email.equals(s1 != null ? s1.getEmail() : "") ? match.getSquad2() : match.getSquad1();
-                sendEmail(email, opponent, match);
-            }
+            // THE ONE-SHOT SOLUTION: Send one bulk message to all recipients in ONE request.
+            // This bypasses the "Too many emails per second" 429 error forever.
+            sendBulkEmailAPI(recipients, match);
+            
             match.setSent(true);
             matchRepository.saveAndFlush(match);
-            System.out.println("EMAIL SENT SUCCESS");
+            System.out.println("API BULK EMAIL SENT SUCCESS");
         } catch (Exception e) {
             System.err.println("EMAIL FAILED: " + e.getMessage());
             throw new RuntimeException("Mail server error: " + e.getMessage());
         }
     }
 
-    private void sendEmail(String to, String opponent, Match match) {
+    private void sendBulkEmailAPI(List<String> toEmails, Match match) {
         String url = "https://sandbox.api.mailtrap.io/api/send/" + mailtrapInboxId;
 
         HttpHeaders headers = new HttpHeaders();
@@ -102,31 +97,30 @@ public class MatchService {
 
         String text = String.format(
             "🔥 Match Details 🔥\n\n" +
-            "Match: %s vs %s\n" +
-            "Opponent: %s\n\n" +
+            "Match: %s vs %s\n\n" +
             "Room ID: %s\n" +
             "Password: %s\n" +
             "Date: %s\n" +
             "Time: %s\n\n" +
             "All the best 🎮",
-            match.getSquad1(), match.getSquad2(), opponent,
+            match.getSquad1(), match.getSquad2(),
             match.getRoomId(), match.getPassword(), 
             match.getMatchDate(), match.getMatchTime()
         );
 
+        // Convert list of emails into Mailtrap's JSON format for "to"
+        List<Map<String, String>> toList = toEmails.stream()
+            .map(email -> Map.of("email", email))
+            .collect(Collectors.toList());
+
         Map<String, Object> body = new HashMap<>();
         body.put("from", Map.of("email", "tourneygames1@gmail.com", "name", "Tourney Livid"));
-        body.put("to", List.of(Map.of("email", to)));
+        body.put("to", toList);
         body.put("subject", "🔥 Match Details - Tourney Livid");
         body.put("text", text);
 
         HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
-        
-        try {
-            restTemplate.postForEntity(url, request, String.class);
-        } catch (Exception e) {
-            throw new RuntimeException("API Mail Error: " + e.getMessage());
-        }
+        restTemplate.postForEntity(url, request, String.class);
     }
 
     public List<Match> generateMatches() {
