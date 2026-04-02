@@ -3,6 +3,7 @@ package com.example.back.controller;
 import com.example.back.entity.Squad;
 import com.example.back.service.SquadService;
 import lombok.RequiredArgsConstructor;
+import org.json.JSONArray;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
@@ -24,17 +25,24 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class PaymentController {
 
-    @Value("${cashfree.app_id}")
+    @Value("${cashfree.appId}")
     private String appId;
 
-    @Value("${cashfree.secret_key}")
+    @Value("${cashfree.secretKey}")
     private String secretKey;
 
     private final SquadService squadService;
 
     @PostMapping(value = "/create-order", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<String> createOrder() throws Exception {
+    public ResponseEntity<?> createOrder(@RequestBody Map<String, Object> data) throws Exception {
         String orderId = "order_" + UUID.randomUUID().toString().replace("-", "").substring(0, 20);
+
+        // 1. PRE-REGISTER Squad to ensure user isn't charged for a duplicate & hold their spot
+        try {
+            squadService.preRegisterSquad(data, orderId);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(400).body(Collections.singletonMap("message", e.getMessage()));
+        }
         
         RestTemplate restTemplate = new RestTemplate();
         HttpHeaders headers = new HttpHeaders();
@@ -51,7 +59,7 @@ public class PaymentController {
         
         JSONObject customerDetails = new JSONObject();
         customerDetails.put("customer_id", "cust_" + UUID.randomUUID().toString().substring(0, 8));
-        customerDetails.put("customer_phone", "9999999999");
+        customerDetails.put("customer_phone", data.getOrDefault("phone", "9999999999").toString());
         requestBody.put("customer_details", customerDetails);
         
         HttpEntity<String> entity = new HttpEntity<>(requestBody.toString(), headers);
@@ -63,7 +71,7 @@ public class PaymentController {
 
     @PostMapping("/verify")
     @Transactional
-    public ResponseEntity<?> verifyPayment(@RequestBody Map<String, Object> data) throws Exception {
+    public ResponseEntity<?> verifyPayment(@RequestBody Map<String, Object> data) {
         String orderId = (String) data.get("orderId");
         
         RestTemplate restTemplate = new RestTemplate();
@@ -73,36 +81,60 @@ public class PaymentController {
         headers.set("x-client-secret", secretKey);
         
         HttpEntity<String> entity = new HttpEntity<>(headers);
-        ResponseEntity<String> response = restTemplate.exchange("https://api.cashfree.com/pg/orders/" + orderId, HttpMethod.GET, entity, String.class);
         
-        JSONObject jsonResponse = new JSONObject(response.getBody());
-        String orderStatus = jsonResponse.optString("order_status");
-
-        if ("PAID".equals(orderStatus)) {
-            if (data.containsKey("formData") && data.get("formData") instanceof Map) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> formData = (Map<String, Object>) data.get("formData");
-                
-                Squad squad = new Squad();
-                squad.setSquadName((String) formData.get("squadName"));
-                squad.setLeaderName((String) formData.get("leaderName"));
-                squad.setPhone((String) formData.get("phone"));
-                squad.setEmail((String) formData.get("email"));
-                squad.setP1Name((String) formData.get("p1Name")); squad.setP1Uid((String) formData.get("p1Uid"));
-                squad.setP2Name((String) formData.get("p2Name")); squad.setP2Uid((String) formData.get("p2Uid"));
-                squad.setP3Name((String) formData.get("p3Name")); squad.setP3Uid((String) formData.get("p3Uid"));
-                squad.setP4Name((String) formData.get("p4Name")); squad.setP4Uid((String) formData.get("p4Uid"));
-                squad.setP5Name((String) formData.get("p5Name")); squad.setP5Uid((String) formData.get("p5Uid"));
-
-                squad.setPaymentStatus("SUCCESS");
-                
-                Squad savedSquad = squadService.registerSquad(squad);
-                return ResponseEntity.ok(savedSquad);
-            } 
+        try {
+            ResponseEntity<String> response = restTemplate.exchange("https://api.cashfree.com/pg/orders/" + orderId + "/payments", HttpMethod.GET, entity, String.class);
+            JSONArray paymentsArray = new JSONArray(response.getBody());
             
-            return ResponseEntity.ok("success");
-        } else {
-            return ResponseEntity.status(400).body("failure");
+            boolean isSuccess = false;
+            for (int i = 0; i < paymentsArray.length(); i++) {
+                JSONObject payment = paymentsArray.getJSONObject(i);
+                if ("SUCCESS".equals(payment.optString("payment_status"))) {
+                    isSuccess = true;
+                    break;
+                }
+            }
+
+            if (isSuccess) {
+                try {
+                    Squad savedSquad = squadService.finalizeRegistration(orderId);
+                    return ResponseEntity.ok(savedSquad);
+                } catch (RuntimeException e) {
+                    return ResponseEntity.status(400).body(Collections.singletonMap("message", "Registration finalization failed: " + e.getMessage()));
+                }
+            } else {
+                return ResponseEntity.status(400).body(Collections.singletonMap("message", "Payment is still pending or failed. Please contact support if deducted."));
+            }
+        } catch (Exception e) {
+            // Do NOT show failure if verification API fails temporarily
+            return ResponseEntity.ok(Collections.singletonMap("pendingMessage", "Verification is running in background. You will receive a confirmation soon."));
+        }
+    }
+
+    @PostMapping("/webhook")
+    @Transactional
+    public ResponseEntity<?> cashfreeWebhook(@RequestBody Map<String, Object> payload) {
+        try {
+            if (payload.containsKey("data")) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> data = (Map<String, Object>) payload.get("data");
+                if (data.containsKey("order")) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> order = (Map<String, Object>) data.get("order");
+                    String orderId = (String) order.get("order_id");
+                    
+                    if (data.containsKey("payment")) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> payment = (Map<String, Object>) data.get("payment");
+                        if ("SUCCESS".equals(payment.get("payment_status"))) {
+                            squadService.finalizeRegistration(orderId);
+                        }
+                    }
+                }
+            }
+            return ResponseEntity.ok("Webhook received");
+        } catch (Exception e) {
+             return ResponseEntity.status(500).body("Error processing webhook");
         }
     }
 }

@@ -64,6 +64,9 @@ public class Squad {
     @Column(nullable = false)
     private String paymentStatus = "PENDING";
 
+    @Column(unique = true)
+    private String orderId;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 }

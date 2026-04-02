@@ -18,7 +18,7 @@ public class SquadController {
 
     @PostMapping("/register")
     public ResponseEntity<Squad> registerSquad(@RequestBody Squad squad) {
-        Squad registeredSquad = squadService.registerSquad(squad);
+        Squad registeredSquad = squadService.adminRegisterSquad(squad);
         return ResponseEntity.ok(registeredSquad);
     }
 

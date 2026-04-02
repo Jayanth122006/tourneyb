@@ -9,4 +9,9 @@ public interface SquadRepository extends JpaRepository<Squad, Long> {
     boolean existsBySquadName(String squadName);
     boolean existsByPhone(String phone);
     boolean existsByEmail(String email);
+
+    Squad findBySquadName(String squadName);
+    Squad findByPhone(String phone);
+    Squad findByEmail(String email);
+    Squad findByOrderId(String orderId);
 }
