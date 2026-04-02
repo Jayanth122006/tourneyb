@@ -5,15 +5,20 @@ import com.example.back.entity.Squad;
 import com.example.back.repository.MatchRepository;
 import com.example.back.repository.SquadRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -23,7 +28,13 @@ public class MatchService {
 
     private final MatchRepository matchRepository;
     private final SquadRepository squadRepository;
-    private final JavaMailSender mailSender;
+    private final RestTemplate restTemplate;
+
+    @Value("${mailtrap.token}")
+    private String mailtrapToken;
+
+    @Value("${mailtrap.inboxId}")
+    private String mailtrapInboxId;
 
     public Match updateMatch(Long id, com.example.back.dto.MatchDTO dto) {
         System.out.println("DEBUG ROOT: Service processing DTO for ID " + id);
@@ -78,10 +89,12 @@ public class MatchService {
     }
 
     private void sendEmail(String to, String opponent, Match match) {
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setTo(to);
-        message.setSubject("🔥 Match Details - Tourney Livid");
-        
+        String url = "https://sandbox.api.mailtrap.io/api/send/" + mailtrapInboxId;
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("Api-Token", mailtrapToken);
+
         String text = String.format(
             "🔥 Match Details 🔥\n\n" +
             "Match: %s vs %s\n" +
@@ -95,9 +108,20 @@ public class MatchService {
             match.getRoomId(), match.getPassword(), 
             match.getMatchDate(), match.getMatchTime()
         );
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("from", Map.of("email", "tourneygames1@gmail.com", "name", "Tourney Livid"));
+        body.put("to", List.of(Map.of("email", to)));
+        body.put("subject", "🔥 Match Details - Tourney Livid");
+        body.put("text", text);
+
+        HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
         
-        message.setText(text);
-        mailSender.send(message);
+        try {
+            restTemplate.postForEntity(url, request, String.class);
+        } catch (Exception e) {
+            throw new RuntimeException("API Mail Error: " + e.getMessage());
+        }
     }
 
     public List<Match> generateMatches() {
