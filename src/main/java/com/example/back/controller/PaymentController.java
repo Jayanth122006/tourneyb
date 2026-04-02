@@ -54,7 +54,7 @@ public class PaymentController {
         
         JSONObject requestBody = new JSONObject();
         requestBody.put("order_id", orderId);
-        requestBody.put("order_amount", 100.0);
+        requestBody.put("order_amount", 1.0);
         requestBody.put("order_currency", "INR");
         
         JSONObject customerDetails = new JSONObject();
