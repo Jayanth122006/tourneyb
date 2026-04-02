@@ -63,7 +63,7 @@ public class MatchService {
             sendEmail(email, opponent, match);
         }
 
-        match.setIsSent(true);
+        match.setSent(true);
         matchRepository.save(match);
     }
 

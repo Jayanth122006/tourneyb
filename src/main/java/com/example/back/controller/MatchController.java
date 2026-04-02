@@ -21,12 +21,12 @@ public class MatchController {
         return ResponseEntity.ok(matchService.generateMatches());
     }
 
-    @PostMapping("/{id}/update")
+    @PostMapping("/update/{id}")
     public ResponseEntity<Match> updateMatch(@PathVariable Long id, @RequestBody Match match) {
         return ResponseEntity.ok(matchService.updateMatch(id, match));
     }
 
-    @PostMapping("/{id}/send")
+    @PostMapping("/send/{id}")
     public ResponseEntity<Void> sendMatchEmail(@PathVariable Long id) {
         matchService.sendMatchEmail(id);
         return ResponseEntity.ok().build();

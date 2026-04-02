@@ -34,8 +34,7 @@ public class Match {
     private String matchDate;
     private String matchTime;
 
-    @Column(nullable = false)
-    private Boolean isSent = false;
+    private boolean sent = false;
 
     @Column(nullable = false)
     private LocalDateTime createdAt;
