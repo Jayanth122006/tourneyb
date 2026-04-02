@@ -75,7 +75,12 @@ public class MatchService {
         }
 
         try {
-            for (String email : recipients) {
+            for (int i = 0; i < recipients.size(); i++) {
+                String email = recipients.get(i);
+                
+                // Add a small delay between emails to respect Mailtrap's free rate-limit (1 email/sec)
+                if (i > 0) Thread.sleep(1100); 
+
                 String opponent = email.equals(s1 != null ? s1.getEmail() : "") ? match.getSquad2() : match.getSquad1();
                 sendEmail(email, opponent, match);
             }
