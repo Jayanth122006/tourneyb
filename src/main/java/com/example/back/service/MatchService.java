@@ -77,13 +77,16 @@ public class MatchService {
         message.setSubject("🔥 Match Details - Tourney Livid");
         
         String text = String.format(
-            "Opponent: %s\n" +
+            "🔥 Match Details 🔥\n\n" +
+            "Match: %s vs %s\n" +
+            "Opponent: %s\n\n" +
             "Room ID: %s\n" +
-            "Password: %s\n\n" +
+            "Password: %s\n" +
             "Date: %s\n" +
             "Time: %s\n\n" +
             "All the best 🎮",
-            opponent, match.getRoomId(), match.getPassword(), 
+            match.getSquad1(), match.getSquad2(), opponent,
+            match.getRoomId(), match.getPassword(), 
             match.getMatchDate(), match.getMatchTime()
         );
         
