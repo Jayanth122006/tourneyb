@@ -7,16 +7,18 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "matches")
+@Table(name = "tournament_matches")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class Match {
 
     @Id
@@ -29,9 +31,16 @@ public class Match {
     @Column(nullable = false)
     private String squad2;
 
+    @Column(name = "room_id")
     private String roomId;
+
+    @Column(name = "room_password")
     private String password;
+
+    @Column(name = "match_date_str")
     private String matchDate;
+
+    @Column(name = "match_time_str")
     private String matchTime;
 
     private boolean sent = false;
