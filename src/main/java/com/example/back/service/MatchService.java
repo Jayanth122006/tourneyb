@@ -30,6 +30,8 @@ public class MatchService {
     private final SquadRepository squadRepository;
     private final RestTemplate restTemplate;
 
+    private final Object emailLock = new Object();
+
     @Value("${mailtrap.token}")
     private String mailtrapToken;
 
@@ -89,29 +91,39 @@ public class MatchService {
         }
 
         List<String> sentSuccessfully = new ArrayList<>();
-        try {
-            for (int i = 0; i < recipients.size(); i++) {
-                String email = recipients.get(i);
-                
-                // Add a mandatory delay to be 100% safe with Mailtrap's free-tier (1 email/sec)
-                // This ensures separate entries in the dashboard and NO 429 errors.
-                if (i > 0) {
-                    System.out.println("DEBUG ROOT: Waiting 2.2s for rate-limit safety...");
-                    Thread.sleep(2200); 
-                }
+        
+        // --- THE FINAL FORTRESS: Server-Wide Synchronization ---
+        // Even if you click 10 'Send' buttons at once, the server will process them ONE by ONE.
+        synchronized (emailLock) {
+            try {
+                for (int i = 0; i < recipients.size(); i++) {
+                    String email = recipients.get(i);
+                    
+                    // First email of first request has 0 delay. Subsequent emails wait 3.5s.
+                    // This is the ONLY way to be 100% safe on Mailtrap Free Sandbox.
+                    if (i > 0) {
+                        System.out.println("DEBUG ROOT: [🔒 Lock Active] Waiting 3.5s for rate-limit safety...");
+                        Thread.sleep(3500); 
+                    }
 
-                System.out.println("DEBUG ROOT: Sending Individual API Mail to: " + email);
-                sendEmailAPI(email, match);
-                sentSuccessfully.add(email);
+                    System.out.println("DEBUG ROOT: Sending Individual API Mail to: " + email);
+                    sendEmailAPI(email, match);
+                    sentSuccessfully.add(email);
+                }
+                
+                match.setSent(true);
+                matchRepository.saveAndFlush(match);
+                
+                // Add a final cooldown after the match sequence to protect the NEXT click
+                System.out.println("DEBUG ROOT: [🔒 Lock Release] Final 1.5s cooldown...");
+                Thread.sleep(1500); 
+
+                System.out.println("ALL INDIVIDUAL EMAILS SENT SUCCESSFULLY: " + sentSuccessfully);
+                return sentSuccessfully;
+            } catch (Exception e) {
+                System.err.println("EMAIL SEQUENCE FAILED: " + e.getMessage());
+                throw new RuntimeException("Mail server error during sequence: " + e.getMessage());
             }
-            
-            match.setSent(true);
-            matchRepository.saveAndFlush(match);
-            System.out.println("ALL INDIVIDUAL EMAILS SENT SUCCESSFULLY: " + sentSuccessfully);
-            return sentSuccessfully;
-        } catch (Exception e) {
-            System.err.println("EMAIL SEQUENCE FAILED: " + e.getMessage());
-            throw new RuntimeException("Mail server error during sequence: " + e.getMessage());
         }
     }
 
