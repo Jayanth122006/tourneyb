@@ -23,14 +23,13 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-@Transactional
 public class MatchService {
 
     private final MatchRepository matchRepository;
     private final SquadRepository squadRepository;
     private final RestTemplate restTemplate;
 
-    private final Object emailLock = new Object();
+    private static final Object emailLock = new Object();
 
     @Value("${mailtrap.token}")
     private String mailtrapToken;
@@ -38,6 +37,7 @@ public class MatchService {
     @Value("${mailtrap.inboxId}")
     private String mailtrapInboxId;
 
+    @Transactional
     public Match updateMatch(Long id, com.example.back.dto.MatchDTO dto) {
         System.out.println("DEBUG ROOT: Service processing DTO for ID " + id);
         Match match = matchRepository.findById(id)
@@ -53,6 +53,7 @@ public class MatchService {
         return saved;
     }
 
+    // No @Transactional here (External side-effects should be isolated)
     public List<String> sendMatchEmail(Long id) {
         Match match = matchRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Match not found"));
@@ -92,18 +93,17 @@ public class MatchService {
 
         List<String> sentSuccessfully = new ArrayList<>();
         
-        // --- THE FINAL FORTRESS: Server-Wide Synchronization ---
-        // Even if you click 10 'Send' buttons at once, the server will process them ONE by ONE.
+        // --- THE FINAL FORTRESS: Server-Wide Static Synchronization ---
+        // STATIC lock ensures only one email goes out across the ENTIRE system.
         synchronized (emailLock) {
             try {
                 for (int i = 0; i < recipients.size(); i++) {
                     String email = recipients.get(i);
                     
-                    // First email of first request has 0 delay. Subsequent emails wait 3.5s.
-                    // This is the ONLY way to be 100% safe on Mailtrap Free Sandbox.
+                    // Increased delay to 5.5 seconds for maximum "Sandbox" safety.
                     if (i > 0) {
-                        System.out.println("DEBUG ROOT: [🔒 Lock Active] Waiting 3.5s for rate-limit safety...");
-                        Thread.sleep(3500); 
+                        System.out.println("DEBUG ROOT: [🔒 Lock Active] Waiting 5.5s for rate-limit safety...");
+                        Thread.sleep(5500); 
                     }
 
                     System.out.println("DEBUG ROOT: Sending Individual API Mail to: " + email);
@@ -111,15 +111,19 @@ public class MatchService {
                     sentSuccessfully.add(email);
                 }
                 
+                // Final non-transactional database update
                 match.setSent(true);
                 matchRepository.saveAndFlush(match);
                 
                 // Add a final cooldown after the match sequence to protect the NEXT click
-                System.out.println("DEBUG ROOT: [🔒 Lock Release] Final 1.5s cooldown...");
-                Thread.sleep(1500); 
+                System.out.println("DEBUG ROOT: [🔒 Lock Release] Final 2s cooldown...");
+                Thread.sleep(2000); 
 
                 System.out.println("ALL INDIVIDUAL EMAILS SENT SUCCESSFULLY: " + sentSuccessfully);
                 return sentSuccessfully;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("Wait interrupted.");
             } catch (Exception e) {
                 System.err.println("EMAIL SEQUENCE FAILED: " + e.getMessage());
                 throw new RuntimeException("Mail server error during sequence: " + e.getMessage());
@@ -133,6 +137,9 @@ public class MatchService {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("Api-Token", mailtrapToken);
+
+        // Add a unique ID to each subject to prevent duplication issues.
+        String subject = String.format("🔥 Match Details - %s [Ref: %s]", match.getSquad1(), System.currentTimeMillis() % 10000);
 
         String text = String.format(
             "🔥 Match Details 🔥\n\n" +
@@ -150,13 +157,14 @@ public class MatchService {
         Map<String, Object> body = new HashMap<>();
         body.put("from", Map.of("email", "tourneygames1@gmail.com", "name", "Tourney Livid"));
         body.put("to", List.of(Map.of("email", toEmail)));
-        body.put("subject", "🔥 Match Details - Tourney Livid");
+        body.put("subject", subject);
         body.put("text", text);
 
         HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
         restTemplate.postForEntity(url, request, String.class);
     }
 
+    @Transactional
     public List<Match> generateMatches() {
         // Clear existing matches before generating new ones (Efficient re-shuffle)
         matchRepository.deleteAll();
