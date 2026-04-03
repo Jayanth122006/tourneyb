@@ -88,21 +88,34 @@ public class MatchService {
             throw new RuntimeException("No valid emails found for squads.");
         }
 
+        List<String> sentSuccessfully = new ArrayList<>();
         try {
-            // THE ONE-SHOT SOLUTION: Send one bulk message to all recipients in ONE request.
-            sendBulkEmailAPI(recipients, match);
+            for (int i = 0; i < recipients.size(); i++) {
+                String email = recipients.get(i);
+                
+                // Add a mandatory delay to be 100% safe with Mailtrap's free-tier (1 email/sec)
+                // This ensures separate entries in the dashboard and NO 429 errors.
+                if (i > 0) {
+                    System.out.println("DEBUG ROOT: Waiting 2.2s for rate-limit safety...");
+                    Thread.sleep(2200); 
+                }
+
+                System.out.println("DEBUG ROOT: Sending Individual API Mail to: " + email);
+                sendEmailAPI(email, match);
+                sentSuccessfully.add(email);
+            }
             
             match.setSent(true);
             matchRepository.saveAndFlush(match);
-            System.out.println("API BULK EMAIL SENT SUCCESSFULLY TO: " + recipients);
-            return recipients;
+            System.out.println("ALL INDIVIDUAL EMAILS SENT SUCCESSFULLY: " + sentSuccessfully);
+            return sentSuccessfully;
         } catch (Exception e) {
-            System.err.println("EMAIL FAILED: " + e.getMessage());
-            throw new RuntimeException("Mail server error: " + e.getMessage());
+            System.err.println("EMAIL SEQUENCE FAILED: " + e.getMessage());
+            throw new RuntimeException("Mail server error during sequence: " + e.getMessage());
         }
     }
 
-    private void sendBulkEmailAPI(List<String> toEmails, Match match) {
+    private void sendEmailAPI(String toEmail, Match match) {
         String url = "https://sandbox.api.mailtrap.io/api/send/" + mailtrapInboxId;
 
         HttpHeaders headers = new HttpHeaders();
@@ -122,14 +135,9 @@ public class MatchService {
             match.getMatchDate(), match.getMatchTime()
         );
 
-        // Convert list of emails into Mailtrap's JSON format for "to"
-        List<Map<String, String>> toList = toEmails.stream()
-            .map(email -> Map.of("email", email))
-            .collect(Collectors.toList());
-
         Map<String, Object> body = new HashMap<>();
         body.put("from", Map.of("email", "tourneygames1@gmail.com", "name", "Tourney Livid"));
-        body.put("to", toList);
+        body.put("to", List.of(Map.of("email", toEmail)));
         body.put("subject", "🔥 Match Details - Tourney Livid");
         body.put("text", text);
 
