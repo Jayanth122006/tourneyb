@@ -139,8 +139,13 @@ public class MatchService {
         // Clear existing matches before generating new ones (Efficient re-shuffle)
         matchRepository.deleteAll();
 
-        // Fetch ONLY squads that have PAID
-        List<Squad> squads = squadRepository.findByPaymentStatus("PAID");
+        // Fetch ONLY squads that have PAID (Case-Insensitive)
+        List<Squad> squads = squadRepository.findByPaymentStatusIgnoreCase("PAID");
+        
+        if (squads.isEmpty()) {
+            throw new RuntimeException("No PAID squads found in database! You can only generate matches for squads that have completed payment.");
+        }
+        
         System.out.println("DEBUG ROOT: Generating matches for " + squads.size() + " paid squads.");
         
         // Extract names

@@ -16,4 +16,5 @@ public interface SquadRepository extends JpaRepository<Squad, Long> {
     Squad findByEmail(String email);
     Squad findByOrderId(String orderId);
     java.util.List<Squad> findByPaymentStatus(String paymentStatus);
+    java.util.List<Squad> findByPaymentStatusIgnoreCase(String paymentStatus);
 }
