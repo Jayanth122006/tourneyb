@@ -19,8 +19,12 @@ public class MatchController {
     private final MatchService matchService;
 
     @PostMapping("/generate")
-    public ResponseEntity<List<Match>> generateMatches() {
-        return ResponseEntity.ok(matchService.generateMatches());
+    public ResponseEntity<?> generateMatches() {
+        try {
+            return ResponseEntity.ok(matchService.generateMatches());
+        } catch (Exception e) {
+            return ResponseEntity.status(400).body(Map.of("message", e.getMessage()));
+        }
     }
 
     @PostMapping("/update/{id}")
