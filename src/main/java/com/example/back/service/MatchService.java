@@ -62,12 +62,24 @@ public class MatchService {
 
         List<String> recipients = new ArrayList<>();
         
-        Squad s1 = squadRepository.findBySquadName(match.getSquad1());
-        if (s1 != null) recipients.add(s1.getEmail());
+        String squad1Name = match.getSquad1() != null ? match.getSquad1().trim() : "";
+        Squad s1 = squadRepository.findBySquadNameIgnoreCase(squad1Name);
+        if (s1 != null) {
+            System.out.println("DEBUG ROOT: Found Squad1 Email: " + s1.getEmail());
+            recipients.add(s1.getEmail());
+        } else {
+            System.err.println("CRITICAL: SQUAD1 NOT FOUND IN DB: [" + squad1Name + "]");
+        }
         
-        if (!"BYE".equals(match.getSquad2())) {
-            Squad s2 = squadRepository.findBySquadName(match.getSquad2());
-            if (s2 != null) recipients.add(s2.getEmail());
+        String squad2Name = match.getSquad2() != null ? match.getSquad2().trim() : "";
+        if (!"BYE".equalsIgnoreCase(squad2Name)) {
+            Squad s2 = squadRepository.findBySquadNameIgnoreCase(squad2Name);
+            if (s2 != null) {
+                System.out.println("DEBUG ROOT: Found Squad2 Email: " + s2.getEmail());
+                recipients.add(s2.getEmail());
+            } else {
+                System.err.println("CRITICAL: SQUAD2 NOT FOUND IN DB: [" + squad2Name + "]");
+            }
         }
 
         if (recipients.isEmpty()) {
