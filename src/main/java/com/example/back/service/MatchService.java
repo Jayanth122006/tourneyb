@@ -51,7 +51,7 @@ public class MatchService {
         return saved;
     }
 
-    public void sendMatchEmail(Long id) {
+    public List<String> sendMatchEmail(Long id) {
         Match match = matchRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Match not found"));
 
@@ -63,6 +63,7 @@ public class MatchService {
         List<String> recipients = new ArrayList<>();
         
         String squad1Name = match.getSquad1() != null ? match.getSquad1().trim() : "";
+        System.out.println("DEBUG ROOT: Looking up SQUAD1: [" + squad1Name + "]");
         Squad s1 = squadRepository.findBySquadNameIgnoreCase(squad1Name);
         if (s1 != null) {
             System.out.println("DEBUG ROOT: Found Squad1 Email: " + s1.getEmail());
@@ -73,6 +74,7 @@ public class MatchService {
         
         String squad2Name = match.getSquad2() != null ? match.getSquad2().trim() : "";
         if (!"BYE".equalsIgnoreCase(squad2Name)) {
+            System.out.println("DEBUG ROOT: Looking up SQUAD2: [" + squad2Name + "]");
             Squad s2 = squadRepository.findBySquadNameIgnoreCase(squad2Name);
             if (s2 != null) {
                 System.out.println("DEBUG ROOT: Found Squad2 Email: " + s2.getEmail());
@@ -88,12 +90,12 @@ public class MatchService {
 
         try {
             // THE ONE-SHOT SOLUTION: Send one bulk message to all recipients in ONE request.
-            // This is the ONLY way to guarantee 0% 429 Rate Limit errors on Mailtrap Free.
             sendBulkEmailAPI(recipients, match);
             
             match.setSent(true);
             matchRepository.saveAndFlush(match);
-            System.out.println("API BULK EMAIL SENT SUCCESSFULLY");
+            System.out.println("API BULK EMAIL SENT SUCCESSFULLY TO: " + recipients);
+            return recipients;
         } catch (Exception e) {
             System.err.println("EMAIL FAILED: " + e.getMessage());
             throw new RuntimeException("Mail server error: " + e.getMessage());

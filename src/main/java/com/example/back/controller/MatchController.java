@@ -40,8 +40,8 @@ public class MatchController {
     @PostMapping("/send/{id}")
     public ResponseEntity<?> sendMatchEmail(@PathVariable Long id) {
         try {
-            matchService.sendMatchEmail(id);
-            return ResponseEntity.ok().build();
+            List<String> recipients = matchService.sendMatchEmail(id);
+            return ResponseEntity.ok(Map.of("message", "Emails sent successfully!", "recipients", recipients));
         } catch (Exception e) {
             return ResponseEntity.status(400).body(Map.of("message", e.getMessage()));
         }
