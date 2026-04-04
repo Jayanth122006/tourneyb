@@ -4,6 +4,7 @@ import com.example.back.entity.Match;
 import com.example.back.entity.Squad;
 import com.example.back.repository.MatchRepository;
 import com.example.back.repository.SquadRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
@@ -22,6 +23,7 @@ public class MatchService {
     private final MatchRepository matchRepository;
     private final SquadRepository squadRepository;
     private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
 
     @Value("${mailtrap.token}")
     private String mailtrapToken;
@@ -121,6 +123,14 @@ public class MatchService {
                 match.getMatchDate(), match.getMatchTime()
             );
             body.put("text", textContent);
+
+            // ✅ RAW JSON LOGGING (THE ULTIMATE TRUTH)
+            try {
+                String rawJson = objectMapper.writeValueAsString(body);
+                System.out.println(">>> RAW JSON SENT: " + rawJson);
+            } catch (Exception jsonEx) {
+                System.err.println("Failed to log JSON: " + jsonEx.getMessage());
+            }
 
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
             
