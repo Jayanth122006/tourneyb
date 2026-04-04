@@ -5,20 +5,15 @@ import com.example.back.entity.Squad;
 import com.example.back.repository.MatchRepository;
 import com.example.back.repository.SquadRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -27,15 +22,9 @@ public class MatchService {
 
     private final MatchRepository matchRepository;
     private final SquadRepository squadRepository;
-    private final RestTemplate restTemplate;
+    private final JavaMailSender mailSender; // ✅ Standard Spring Mail
 
     private static final Object emailLock = new Object();
-
-    @Value("${mailtrap.token}")
-    private String mailtrapToken;
-
-    @Value("${mailtrap.inboxId}")
-    private String mailtrapInboxId;
 
     @Transactional
     public Match updateMatch(Long id, com.example.back.dto.MatchDTO dto) {
@@ -53,7 +42,6 @@ public class MatchService {
         return saved;
     }
 
-    // No @Transactional here (External side-effects should be isolated)
     public List<String> sendMatchEmail(Long id) {
         Match match = matchRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Match not found"));
@@ -66,24 +54,16 @@ public class MatchService {
         List<String> recipients = new ArrayList<>();
         
         String squad1Name = match.getSquad1() != null ? match.getSquad1().trim() : "";
-        System.out.println("DEBUG ROOT: Looking up SQUAD1: [" + squad1Name + "]");
         Squad s1 = squadRepository.findBySquadNameIgnoreCase(squad1Name);
         if (s1 != null) {
-            System.out.println("DEBUG ROOT: Found Squad1 Email: " + s1.getEmail());
             recipients.add(s1.getEmail());
-        } else {
-            System.err.println("CRITICAL: SQUAD1 NOT FOUND IN DB: [" + squad1Name + "]");
         }
         
         String squad2Name = match.getSquad2() != null ? match.getSquad2().trim() : "";
         if (!"BYE".equalsIgnoreCase(squad2Name)) {
-            System.out.println("DEBUG ROOT: Looking up SQUAD2: [" + squad2Name + "]");
             Squad s2 = squadRepository.findBySquadNameIgnoreCase(squad2Name);
             if (s2 != null) {
-                System.out.println("DEBUG ROOT: Found Squad2 Email: " + s2.getEmail());
                 recipients.add(s2.getEmail());
-            } else {
-                System.err.println("CRITICAL: SQUAD2 NOT FOUND IN DB: [" + squad2Name + "]");
             }
         }
 
@@ -91,77 +71,54 @@ public class MatchService {
             throw new RuntimeException("No valid emails found for squads.");
         }
 
-        List<String> sentSuccessfully = new ArrayList<>();
-        
-        // --- THE FINAL FORTRESS: Server-Wide Static Synchronization ---
-        // STATIC lock ensures only one email goes out across the ENTIRE system.
+        // --- THE FINAL SMTP FORTRESS ---
         synchronized (emailLock) {
             try {
-                for (int i = 0; i < recipients.size(); i++) {
-                    String email = recipients.get(i);
-                    
-                    // Increased delay to 5.5 seconds for maximum "Sandbox" safety.
-                    if (i > 0) {
-                        System.out.println("DEBUG ROOT: [🔒 Lock Active] Waiting 5.5s for rate-limit safety...");
-                        Thread.sleep(5500); 
-                    }
-
-                    System.out.println("DEBUG ROOT: Sending Individual API Mail to: " + email);
-                    sendEmailAPI(email, match);
-                    sentSuccessfully.add(email);
-                }
+                SimpleMailMessage message = new SimpleMailMessage();
+                message.setFrom("tourneygames1@gmail.com");
                 
-                // Final non-transactional database update
+                // ✅ KEY FIX: Use BOTH emails in a single transaction
+                message.setTo(recipients.toArray(new String[0]));
+                
+                message.setSubject("🔥 Match Details - " + match.getSquad1() + " [Ref: " + (System.currentTimeMillis() % 10000) + "]");
+                
+                String text = String.format(
+                    "🔥 Match Details 🔥\n\n" +
+                    "Match: %s vs %s\n\n" +
+                    "Room ID: %s\n" +
+                    "Password: %s\n" +
+                    "Date: %s\n" +
+                    "Time: %s\n\n" +
+                    "All the best 🎮",
+                    match.getSquad1(), match.getSquad2(),
+                    match.getRoomId(), match.getPassword(), 
+                    match.getMatchDate(), match.getMatchTime()
+                );
+                message.setText(text);
+
+                // ✅ LOGS FOR VERIFICATION
+                System.out.println("----------------------------------------");
+                System.out.println("PREPARING TO SEND EMAIL TO:");
+                for (String email : recipients) {
+                    System.out.println("👉 Recipient: " + email);
+                }
+
+                mailSender.send(message);
+
                 match.setSent(true);
                 matchRepository.saveAndFlush(match);
                 
-                // Add a final cooldown after the match sequence to protect the NEXT click
-                System.out.println("DEBUG ROOT: [🔒 Lock Release] Final 2s cooldown...");
-                Thread.sleep(2000); 
+                // Brief cool-down to be extra safe with Mailtrap's SMTP connection limit
+                Thread.sleep(1500); 
 
-                System.out.println("ALL INDIVIDUAL EMAILS SENT SUCCESSFULLY: " + sentSuccessfully);
-                return sentSuccessfully;
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new RuntimeException("Wait interrupted.");
+                System.out.println("✅ SMTP EMAIL SENT SUCCESSFULLY!");
+                System.out.println("----------------------------------------");
+                return recipients;
             } catch (Exception e) {
-                System.err.println("EMAIL SEQUENCE FAILED: " + e.getMessage());
-                throw new RuntimeException("Mail server error during sequence: " + e.getMessage());
+                System.err.println("SMTP EMAIL FAILED: " + e.getMessage());
+                throw new RuntimeException("Mail server error: " + e.getMessage());
             }
         }
-    }
-
-    private void sendEmailAPI(String toEmail, Match match) {
-        String url = "https://sandbox.api.mailtrap.io/api/send/" + mailtrapInboxId;
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set("Api-Token", mailtrapToken);
-
-        // Add a unique ID to each subject to prevent duplication issues.
-        String subject = String.format("🔥 Match Details - %s [Ref: %s]", match.getSquad1(), System.currentTimeMillis() % 10000);
-
-        String text = String.format(
-            "🔥 Match Details 🔥\n\n" +
-            "Match: %s vs %s\n\n" +
-            "Room ID: %s\n" +
-            "Password: %s\n" +
-            "Date: %s\n" +
-            "Time: %s\n\n" +
-            "All the best 🎮",
-            match.getSquad1(), match.getSquad2(),
-            match.getRoomId(), match.getPassword(), 
-            match.getMatchDate(), match.getMatchTime()
-        );
-
-        Map<String, Object> body = new HashMap<>();
-        body.put("from", Map.of("email", "tourneygames1@gmail.com", "name", "Tourney Livid"));
-        body.put("to", List.of(Map.of("email", toEmail)));
-        body.put("subject", subject);
-        body.put("text", text);
-
-        HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
-        restTemplate.postForEntity(url, request, String.class);
     }
 
     @Transactional
