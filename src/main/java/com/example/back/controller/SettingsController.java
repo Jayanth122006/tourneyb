@@ -10,7 +10,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/settings")
-@CrossOrigin(origins = "*")
 @RequiredArgsConstructor
 public class SettingsController {
 

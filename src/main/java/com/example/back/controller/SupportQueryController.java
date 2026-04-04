@@ -11,7 +11,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/support")
-@CrossOrigin(origins = "*")
 @RequiredArgsConstructor
 public class SupportQueryController {
 
