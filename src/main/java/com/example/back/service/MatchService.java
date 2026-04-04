@@ -5,15 +5,14 @@ import com.example.back.entity.Squad;
 import com.example.back.repository.MatchRepository;
 import com.example.back.repository.SquadRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -22,7 +21,13 @@ public class MatchService {
 
     private final MatchRepository matchRepository;
     private final SquadRepository squadRepository;
-    private final JavaMailSender mailSender; // ✅ Standard Spring Mail
+    private final RestTemplate restTemplate;
+
+    @Value("${mailtrap.token}")
+    private String mailtrapToken;
+
+    @Value("${mailtrap.inboxId}")
+    private String mailtrapInboxId;
 
     @Transactional
     public Match updateMatch(Long id, com.example.back.dto.MatchDTO dto) {
@@ -69,18 +74,28 @@ public class MatchService {
             throw new RuntimeException("No valid emails found for squads.");
         }
 
-        // --- RELIABLE SMTP DELIVERY ---
+        // --- FIREWALL-PROOF HTTP API DELIVERY ---
         try {
-            System.out.println(">>> STARTING EMAIL DELIVERY FOR MATCH ID: " + id);
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom("tourneygames1@gmail.com");
+            System.out.println(">>> STARTING API DELIVERY FOR MATCH ID: " + id);
             
-            // ✅ BOTH emails in a single transaction
-            message.setTo(recipients.toArray(new String[0]));
+            String url = "https://sandbox.api.mailtrap.io/api/send/" + mailtrapInboxId;
             
-            message.setSubject("🔥 Match Details - " + match.getSquad1() + " [Ref: " + (System.currentTimeMillis() % 10000) + "]");
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("Api-Token", mailtrapToken);
+
+            // Construct the recipient list for JSON
+            List<Map<String, String>> toList = recipients.stream()
+                .map(email -> Map.of("email", email))
+                .collect(Collectors.toList());
+
+            // Construct the JSON body
+            Map<String, Object> body = new HashMap<>();
+            body.put("from", Map.of("email", "hello@demomailtrap.co", "name", "Tourney Admin"));
+            body.put("to", toList);
+            body.put("subject", "🔥 Match Details - " + match.getSquad1());
             
-            String text = String.format(
+            String textContent = String.format(
                 "🔥 Match Details 🔥\n\n" +
                 "Match: %s vs %s\n\n" +
                 "Room ID: %s\n" +
@@ -92,18 +107,23 @@ public class MatchService {
                 match.getRoomId(), match.getPassword(), 
                 match.getMatchDate(), match.getMatchTime()
             );
-            message.setText(text);
+            body.put("text", textContent);
 
-            System.out.println("👉 Attempting to send to: " + String.join(", ", recipients));
-            mailSender.send(message);
-
-            match.setSent(true);
-            matchRepository.saveAndFlush(match);
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
             
-            System.out.println("✅ SMTP EMAIL SENT SUCCESSFULLY FOR MATCH ID: " + id);
-            return recipients;
+            System.out.println("👉 Sending API request to: " + url);
+            ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
+
+            if (response.getStatusCode() == HttpStatus.OK) {
+                match.setSent(true);
+                matchRepository.saveAndFlush(match);
+                System.out.println("✅ API EMAIL SENT SUCCESSFULLY! Status: " + response.getStatusCode());
+                return recipients;
+            } else {
+                throw new RuntimeException("Mailtrap API Error: " + response.getStatusCode());
+            }
         } catch (Exception e) {
-            System.err.println("❌ SMTP EMAIL FAILED: " + e.getMessage());
+            System.err.println("❌ API EMAIL FAILED: " + e.getMessage());
             throw new RuntimeException("Mail server error: " + e.getMessage());
         }
     }
