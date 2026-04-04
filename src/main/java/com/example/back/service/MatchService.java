@@ -57,17 +57,27 @@ public class MatchService {
         List<String> recipients = new ArrayList<>();
         
         String squad1Name = match.getSquad1() != null ? match.getSquad1().trim() : "";
+        System.out.println(">>> TRUTH LOG: Searching for Squad 1: [" + squad1Name + "]");
         Squad s1 = squadRepository.findBySquadNameIgnoreCase(squad1Name);
         if (s1 != null) {
+            System.out.println(">>> TRUTH LOG: Found Squad 1 Email: " + s1.getEmail());
             recipients.add(s1.getEmail());
+        } else {
+            System.out.println(">>> TRUTH LOG: Squad 1 NOT FOUND in database!");
         }
         
         String squad2Name = match.getSquad2() != null ? match.getSquad2().trim() : "";
+        System.out.println(">>> TRUTH LOG: Searching for Squad 2: [" + squad2Name + "]");
         if (!"BYE".equalsIgnoreCase(squad2Name)) {
             Squad s2 = squadRepository.findBySquadNameIgnoreCase(squad2Name);
             if (s2 != null) {
+                System.out.println(">>> TRUTH LOG: Found Squad 2 Email: " + s2.getEmail());
                 recipients.add(s2.getEmail());
+            } else {
+                System.out.println(">>> TRUTH LOG: Squad 2 NOT FOUND in database!");
             }
+        } else {
+            System.out.println(">>> TRUTH LOG: Squad 2 is a BYE. Skipping.");
         }
 
         if (recipients.isEmpty()) {
@@ -77,6 +87,7 @@ public class MatchService {
         // --- FIREWALL-PROOF HTTP API DELIVERY ---
         try {
             System.out.println(">>> STARTING API DELIVERY FOR MATCH ID: " + id);
+            System.out.println(">>> TRUTH LOG: Final Recipient List: " + String.join(", ", recipients));
             
             String url = "https://sandbox.api.mailtrap.io/api/send/" + mailtrapInboxId;
             
@@ -88,6 +99,8 @@ public class MatchService {
             List<Map<String, String>> toList = recipients.stream()
                 .map(email -> Map.of("email", email))
                 .collect(Collectors.toList());
+
+            System.out.println(">>> TRUTH LOG: JSON Payload 'to' field: " + toList);
 
             // Construct the JSON body
             Map<String, Object> body = new HashMap<>();
