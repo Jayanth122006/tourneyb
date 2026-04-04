@@ -24,8 +24,6 @@ public class MatchService {
     private final SquadRepository squadRepository;
     private final JavaMailSender mailSender; // ✅ Standard Spring Mail
 
-    private static final Object emailLock = new Object();
-
     @Transactional
     public Match updateMatch(Long id, com.example.back.dto.MatchDTO dto) {
         System.out.println("DEBUG ROOT: Service processing DTO for ID " + id);
@@ -71,53 +69,42 @@ public class MatchService {
             throw new RuntimeException("No valid emails found for squads.");
         }
 
-        // --- THE FINAL SMTP FORTRESS ---
-        synchronized (emailLock) {
-            try {
-                SimpleMailMessage message = new SimpleMailMessage();
-                message.setFrom("tourneygames1@gmail.com");
-                
-                // ✅ KEY FIX: Use BOTH emails in a single transaction
-                message.setTo(recipients.toArray(new String[0]));
-                
-                message.setSubject("🔥 Match Details - " + match.getSquad1() + " [Ref: " + (System.currentTimeMillis() % 10000) + "]");
-                
-                String text = String.format(
-                    "🔥 Match Details 🔥\n\n" +
-                    "Match: %s vs %s\n\n" +
-                    "Room ID: %s\n" +
-                    "Password: %s\n" +
-                    "Date: %s\n" +
-                    "Time: %s\n\n" +
-                    "All the best 🎮",
-                    match.getSquad1(), match.getSquad2(),
-                    match.getRoomId(), match.getPassword(), 
-                    match.getMatchDate(), match.getMatchTime()
-                );
-                message.setText(text);
+        // --- RELIABLE SMTP DELIVERY ---
+        try {
+            System.out.println(">>> STARTING EMAIL DELIVERY FOR MATCH ID: " + id);
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom("tourneygames1@gmail.com");
+            
+            // ✅ BOTH emails in a single transaction
+            message.setTo(recipients.toArray(new String[0]));
+            
+            message.setSubject("🔥 Match Details - " + match.getSquad1() + " [Ref: " + (System.currentTimeMillis() % 10000) + "]");
+            
+            String text = String.format(
+                "🔥 Match Details 🔥\n\n" +
+                "Match: %s vs %s\n\n" +
+                "Room ID: %s\n" +
+                "Password: %s\n" +
+                "Date: %s\n" +
+                "Time: %s\n\n" +
+                "All the best 🎮",
+                match.getSquad1(), match.getSquad2(),
+                match.getRoomId(), match.getPassword(), 
+                match.getMatchDate(), match.getMatchTime()
+            );
+            message.setText(text);
 
-                // ✅ LOGS FOR VERIFICATION
-                System.out.println("----------------------------------------");
-                System.out.println("PREPARING TO SEND EMAIL TO:");
-                for (String email : recipients) {
-                    System.out.println("👉 Recipient: " + email);
-                }
+            System.out.println("👉 Attempting to send to: " + String.join(", ", recipients));
+            mailSender.send(message);
 
-                mailSender.send(message);
-
-                match.setSent(true);
-                matchRepository.saveAndFlush(match);
-                
-                // Brief cool-down to be extra safe with Mailtrap's SMTP connection limit
-                Thread.sleep(1500); 
-
-                System.out.println("✅ SMTP EMAIL SENT SUCCESSFULLY!");
-                System.out.println("----------------------------------------");
-                return recipients;
-            } catch (Exception e) {
-                System.err.println("SMTP EMAIL FAILED: " + e.getMessage());
-                throw new RuntimeException("Mail server error: " + e.getMessage());
-            }
+            match.setSent(true);
+            matchRepository.saveAndFlush(match);
+            
+            System.out.println("✅ SMTP EMAIL SENT SUCCESSFULLY FOR MATCH ID: " + id);
+            return recipients;
+        } catch (Exception e) {
+            System.err.println("❌ SMTP EMAIL FAILED: " + e.getMessage());
+            throw new RuntimeException("Mail server error: " + e.getMessage());
         }
     }
 
