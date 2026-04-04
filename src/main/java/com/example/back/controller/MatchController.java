@@ -62,12 +62,6 @@ public class MatchController {
     @GetMapping
     public ResponseEntity<?> getAllMatches() {
         try {
-            List<Match> list = matchService.getAllMatches();
-            System.out.println("DEBUG ROOT: Returning " + list.size() + " matches to UI.");
-            if (!list.isEmpty()) {
-                Match m = list.get(0);
-                System.out.println("DEBUG ROOT: First Match Persistence Check -> Room: " + m.getRoomId() + ", Pass: " + m.getPassword());
-            }
             return ResponseEntity.ok(list);
         } catch (Exception e) {
             return ResponseEntity.status(400).body(Map.of("message", e.getMessage()));

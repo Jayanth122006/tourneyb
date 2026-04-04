@@ -70,21 +70,16 @@ public class MatchService {
             throw new RuntimeException("No valid emails found for squads.");
         }
 
-        // --- SINGLE-REQUEST HTTP API (Captures both recipients in one go) ---
         try {
-            System.out.println(">>> STARTING SINGLE-API DELIVERY FOR MATCH ID: " + id);
-            
             String url = "https://sandbox.api.mailtrap.io/api/send/" + mailtrapInboxId;
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             headers.set("Api-Token", mailtrapToken);
 
-            // Construct the recipient list for JSON
             List<Map<String, String>> toList = recipients.stream()
                 .map(email -> Map.of("email", email))
                 .collect(Collectors.toList());
 
-            // Construct the JSON body
             Map<String, Object> body = new HashMap<>();
             body.put("from", Map.of("email", "hello@demomailtrap.co", "name", "Tourney Admin"));
             body.put("to", toList);
@@ -105,20 +100,18 @@ public class MatchService {
             body.put("text", textContent);
 
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
-            
-            System.out.println("👉 Attempting single API send to: " + String.join(", ", recipients));
             ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
 
             if (response.getStatusCode() == HttpStatus.OK) {
                 match.setSent(true);
                 matchRepository.saveAndFlush(match);
-                System.out.println("✅ SINGLE-API EMAIL SENT SUCCESSFULLY!");
+                System.out.println("✅ MATCH ID " + id + " ALERTS SENT TO: " + String.join(", ", recipients));
                 return recipients;
             } else {
-                throw new RuntimeException("Mailtrap API Error: " + response.getStatusCode());
+                throw new RuntimeException("Mailtrap API Response ERROR: " + response.getStatusCode());
             }
         } catch (Exception e) {
-            System.err.println("❌ SINGLE-API FAILED: " + e.getMessage());
+            System.err.println("❌ MATCH ID " + id + " ALERT FAILED: " + e.getMessage());
             throw new RuntimeException("Mail server error: " + e.getMessage());
         }
     }
@@ -129,7 +122,7 @@ public class MatchService {
         List<Squad> squads = squadRepository.findByPaymentStatusIgnoreCase("SUCCESS");
         
         if (squads.isEmpty()) {
-            throw new RuntimeException("No SUCCESSFUL payments found!");
+            throw new RuntimeException("No successful payments found!");
         }
         
         List<String> squadNames = squads.stream()
