@@ -77,13 +77,85 @@ public class SquadService {
         return squadRepository.save(squad);
     }
 
+    @org.springframework.beans.factory.annotation.Value("${sendgrid.api.key}")
+    private String sendgridApiKey;
+
+    @org.springframework.beans.factory.annotation.Value("${sendgrid.from.email}")
+    private String fromEmail;
+
     public Squad finalizeRegistration(String orderId) {
         Squad squad = squadRepository.findByOrderId(orderId);
-        if (squad != null) {
+        if (squad != null && !"SUCCESS".equals(squad.getPaymentStatus())) {
             squad.setPaymentStatus("SUCCESS");
-            return squadRepository.save(squad);
+            Squad savedSquad = squadRepository.save(squad);
+            
+            // Send automatic confirmation email
+            try {
+                sendRegistrationEmail(savedSquad);
+            } catch (Exception e) {
+                System.err.println("❌ Failed to send registration email: " + e.getMessage());
+                // We don't throw error here to ensure registration still succeeds in DB
+            }
+            return savedSquad;
+        }
+        if (squad != null && "SUCCESS".equals(squad.getPaymentStatus())) {
+            return squad; // Already finalized
         }
         throw new RuntimeException("Pending registration not found for order.");
+    }
+
+    private void sendRegistrationEmail(Squad squad) {
+        if (squad.getEmail() == null || squad.getEmail().isEmpty()) return;
+
+        String subject = "✅ Registration Successful - " + squad.getSquadName();
+        String textContent = String.format(
+            "Hello %s,\n\n" +
+            "Your registration for the upcoming tournament is CONFIRMED!\n\n" +
+            "Squad Name: %s\n" +
+            "Leader: %s\n\n" +
+            "What happens next?\n" +
+            "You will receive the Room ID and Password by Friday via email.\n\n" +
+            "⚠️ IMPORTANT: Please check your Spam or Junk folder just in case.\n" +
+            "All official tournament emails will be sent from tourneygames1@gmail.com.\n\n" +
+            "Get ready and all the best! 🎮",
+            squad.getLeaderName(), squad.getSquadName(), squad.getLeaderName()
+        );
+
+        java.util.Map<String, Object> body = new java.util.HashMap<>();
+        
+        java.util.List<java.util.Map<String, Object>> personalizations = new java.util.ArrayList<>();
+        java.util.Map<String, Object> personalization = new java.util.HashMap<>();
+        java.util.List<java.util.Map<String, String>> toList = new java.util.ArrayList<>();
+        
+        java.util.Map<String, String> to = new java.util.HashMap<>();
+        to.put("email", squad.getEmail());
+        toList.add(to);
+        
+        personalization.put("to", toList);
+        personalization.put("subject", subject);
+        personalizations.add(personalization);
+        body.put("personalizations", personalizations);
+
+        java.util.Map<String, String> from = new java.util.HashMap<>();
+        from.put("email", fromEmail);
+        from.put("name", "Tournament Team");
+        body.put("from", from);
+
+        java.util.List<java.util.Map<String, String>> content = new java.util.ArrayList<>();
+        java.util.Map<String, String> contentItem = new java.util.HashMap<>();
+        contentItem.put("type", "text/plain");
+        contentItem.put("value", textContent);
+        content.add(contentItem);
+        body.put("content", content);
+
+        org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
+        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+        headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(sendgridApiKey);
+
+        org.springframework.http.HttpEntity<java.util.Map<String, Object>> request = new org.springframework.http.HttpEntity<>(body, headers);
+        restTemplate.postForEntity("https://api.sendgrid.com/v3/mail/send", request, String.class);
+        System.out.println("✅ Registration success email sent to: " + squad.getEmail());
     }
 
     public Squad adminRegisterSquad(Squad squad) {
