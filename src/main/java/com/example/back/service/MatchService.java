@@ -5,10 +5,13 @@ import com.example.back.entity.Squad;
 import com.example.back.repository.MatchRepository;
 import com.example.back.repository.SquadRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -19,10 +22,12 @@ public class MatchService {
 
     private final MatchRepository matchRepository;
     private final SquadRepository squadRepository;
-    private final JavaMailSender mailSender;
 
-    @org.springframework.beans.factory.annotation.Value("${spring.mail.username}")
+    @org.springframework.beans.factory.annotation.Value("${sendgrid.from.email}")
     private String fromEmail;
+
+    @org.springframework.beans.factory.annotation.Value("${sendgrid.api.key}")
+    private String sendgridApiKey;
 
     @Transactional
     public Match updateMatch(Long id, com.example.back.dto.MatchDTO dto) {
@@ -67,14 +72,8 @@ public class MatchService {
             throw new RuntimeException("No valid emails found for squads.");
         }
 
-        // --- PRODUCTION GMAIL SMTP DELIVERY ---
+        // --- PRODUCTION SENDGRID HTTP API DELIVERY ---
         try {
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom(fromEmail);
-            String[] toRecipients = recipients.toArray(new String[0]);
-            message.setTo(toRecipients);
-            message.setSubject("🔥 Match Details - " + match.getSquad1());
-            
             String textContent = String.format(
                 "🔥 Match Details 🔥\n\n" +
                 "Match: %s vs %s\n\n" +
@@ -87,17 +86,59 @@ public class MatchService {
                 match.getRoomId(), match.getPassword(), 
                 match.getMatchDate(), match.getMatchTime()
             );
-            message.setText(textContent);
+            
+            String subject = "🔥 Match Details - " + match.getSquad1();
 
-            System.out.println("👉 Attempting Gmail SMTP send to: " + String.join(", ", recipients));
-            mailSender.send(message);
+            // Construct SendGrid JSON Payload
+            Map<String, Object> body = new HashMap<>();
+            
+            List<Map<String, Object>> personalizations = new ArrayList<>();
+            Map<String, Object> personalization = new HashMap<>();
+            List<Map<String, String>> toList = new ArrayList<>();
+            for (String email : recipients) {
+                Map<String, String> to = new HashMap<>();
+                to.put("email", email);
+                toList.add(to);
+            }
+            personalization.put("to", toList);
+            personalization.put("subject", subject);
+            personalizations.add(personalization);
+            body.put("personalizations", personalizations);
 
-            match.setSent(true);
-            matchRepository.saveAndFlush(match);
-            System.out.println("✅ SUCCESS: Gmail SMTP mail delivered to squad 1 & squad 2.");
-            return recipients;
+            Map<String, String> from = new HashMap<>();
+            from.put("email", fromEmail);
+            body.put("from", from);
+
+            List<Map<String, String>> content = new ArrayList<>();
+            Map<String, String> contentItem = new HashMap<>();
+            contentItem.put("type", "text/plain");
+            contentItem.put("value", textContent);
+            content.add(contentItem);
+            body.put("content", content);
+
+            // Send via HTTP POST
+            System.out.println("👉 Attempting SendGrid HTTP API send to: " + String.join(", ", recipients));
+            
+            RestTemplate restTemplate = new RestTemplate();
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.setBearerAuth(sendgridApiKey);
+
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
+            ResponseEntity<String> response = restTemplate.postForEntity("https://api.sendgrid.com/v3/mail/send", request, String.class);
+
+            if (response.getStatusCode().is2xxSuccessful()) {
+                match.setSent(true);
+                matchRepository.saveAndFlush(match);
+                System.out.println("✅ SUCCESS: SendGrid HTTP API mail delivered to squad 1 & squad 2. Status: " + response.getStatusCode().value());
+                return recipients;
+            } else {
+                System.err.println("❌ SENDGRID HTTP API FAILED. Status: " + response.getStatusCode().value() + ", Body: " + response.getBody());
+                throw new RuntimeException("SendGrid API error: " + response.getStatusCode().value());
+            }
+
         } catch (Exception e) {
-            System.err.println("❌ GMAIL SMTP FAILED: " + e.getMessage());
+            System.err.println("❌ SENDGRID API FAILED: " + e.getMessage());
             throw new RuntimeException("Mail server error: " + e.getMessage());
         }
     }
