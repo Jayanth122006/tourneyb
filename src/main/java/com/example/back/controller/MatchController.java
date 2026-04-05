@@ -62,6 +62,7 @@ public class MatchController {
     @GetMapping
     public ResponseEntity<?> getAllMatches() {
         try {
+            List<Match> list = matchService.getAllMatches();
             return ResponseEntity.ok(list);
         } catch (Exception e) {
             return ResponseEntity.status(400).body(Map.of("message", e.getMessage()));
