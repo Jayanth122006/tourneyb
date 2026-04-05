@@ -91,6 +91,7 @@ public class MatchService {
                 "- No gun attributes.\n" +
                 "- No character skills.\n" +
                 "- Unlimited ammo and gloo walls.\n" +
+                "- No PC players allowed.\n" +
                 "- NOTE: Spectators will be room owner only. No other spectators are allowed.\n\n" +
                 "All the best 🎮",
                 match.getSquad1(), match.getSquad2(),
