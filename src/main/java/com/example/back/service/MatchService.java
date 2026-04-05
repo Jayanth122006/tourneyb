@@ -5,12 +5,12 @@ import com.example.back.entity.Squad;
 import com.example.back.repository.MatchRepository;
 import com.example.back.repository.SquadRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestTemplate;
 
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -20,13 +20,7 @@ public class MatchService {
 
     private final MatchRepository matchRepository;
     private final SquadRepository squadRepository;
-    private final RestTemplate restTemplate;
-
-    @Value("${mailtrap.token}")
-    private String mailtrapToken;
-
-    @Value("${mailtrap.inboxId}")
-    private String mailtrapInboxId;
+    private final JavaMailSender mailSender;
 
     @Transactional
     public Match updateMatch(Long id, com.example.back.dto.MatchDTO dto) {
@@ -52,6 +46,7 @@ public class MatchService {
 
         List<String> recipients = new ArrayList<>();
         
+        // --- RECIPIENT SEARCH ---
         String squad1Name = match.getSquad1() != null ? match.getSquad1().trim() : "";
         Squad s1 = squadRepository.findBySquadNameIgnoreCase(squad1Name);
         if (s1 != null) {
@@ -70,20 +65,12 @@ public class MatchService {
             throw new RuntimeException("No valid emails found for squads.");
         }
 
+        // --- PRODUCTION GMAIL SMTP DELIVERY ---
         try {
-            String url = "https://sandbox.api.mailtrap.io/api/send/" + mailtrapInboxId;
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.set("Api-Token", mailtrapToken);
-
-            List<Map<String, String>> toList = recipients.stream()
-                .map(email -> Map.of("email", email))
-                .collect(Collectors.toList());
-
-            Map<String, Object> body = new HashMap<>();
-            body.put("from", Map.of("email", "hello@demomailtrap.co", "name", "Tourney Admin"));
-            body.put("to", toList);
-            body.put("subject", "🔥 Match Details - " + match.getSquad1());
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom("tourneygames1@gmail.com");
+            message.setTo(recipients.toArray(new String[0]));
+            message.setSubject("🔥 Match Details - " + match.getSquad1());
             
             String textContent = String.format(
                 "🔥 Match Details 🔥\n\n" +
@@ -97,21 +84,17 @@ public class MatchService {
                 match.getRoomId(), match.getPassword(), 
                 match.getMatchDate(), match.getMatchTime()
             );
-            body.put("text", textContent);
+            message.setText(textContent);
 
-            HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
-            ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
+            System.out.println("👉 Attempting Gmail SMTP send to: " + String.join(", ", recipients));
+            mailSender.send(message);
 
-            if (response.getStatusCode() == HttpStatus.OK) {
-                match.setSent(true);
-                matchRepository.saveAndFlush(match);
-                System.out.println("✅ MATCH ID " + id + " ALERTS SENT TO: " + String.join(", ", recipients));
-                return recipients;
-            } else {
-                throw new RuntimeException("Mailtrap API Response ERROR: " + response.getStatusCode());
-            }
+            match.setSent(true);
+            matchRepository.saveAndFlush(match);
+            System.out.println("✅ SUCCESS: Gmail SMTP mail delivered to squad 1 & squad 2.");
+            return recipients;
         } catch (Exception e) {
-            System.err.println("❌ MATCH ID " + id + " ALERT FAILED: " + e.getMessage());
+            System.err.println("❌ GMAIL SMTP FAILED: " + e.getMessage());
             throw new RuntimeException("Mail server error: " + e.getMessage());
         }
     }
