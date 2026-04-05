@@ -81,6 +81,17 @@ public class MatchService {
                 "Password: %s\n" +
                 "Date: %s\n" +
                 "Time: %s\n\n" +
+                "⚠️ MATCH RULES & REGULATIONS ⚠️\n" +
+                "- Do not enter house tops or room tops.\n" +
+                "- Do not break gloo walls.\n" +
+                "- No gloo climbing.\n" +
+                "- No over camping.\n" +
+                "- Hacks, modded APKs, or panels are strictly prohibited.\n" +
+                "- Revives are allowed.\n" +
+                "- No gun attributes.\n" +
+                "- No character skills.\n" +
+                "- Unlimited ammo and gloo walls.\n" +
+                "- NOTE: Spectators will be room owner only. No other spectators are allowed.\n\n" +
                 "All the best 🎮",
                 match.getSquad1(), match.getSquad2(),
                 match.getRoomId(), match.getPassword(), 
