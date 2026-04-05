@@ -17,13 +17,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin")
-@CrossOrigin(origins = {
-    "https://tourney-livid.vercel.app",
-    "https://tourney-v2.vercel.app",
-    "https://tourney-games.vercel.app",
-    "http://localhost:3000",
-    "http://localhost:5173"
-})
 @RequiredArgsConstructor
 public class AdminController {
 
