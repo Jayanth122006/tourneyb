@@ -10,7 +10,6 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -21,6 +20,9 @@ public class MatchService {
     private final MatchRepository matchRepository;
     private final SquadRepository squadRepository;
     private final JavaMailSender mailSender;
+
+    @org.springframework.beans.factory.annotation.Value("${spring.mail.username}")
+    private String fromEmail;
 
     @Transactional
     public Match updateMatch(Long id, com.example.back.dto.MatchDTO dto) {
@@ -68,8 +70,9 @@ public class MatchService {
         // --- PRODUCTION GMAIL SMTP DELIVERY ---
         try {
             SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom("tourneygames1@gmail.com");
-            message.setTo(recipients.toArray(new String[0]));
+            message.setFrom(fromEmail);
+            String[] toRecipients = recipients.toArray(new String[0]);
+            message.setTo(toRecipients);
             message.setSubject("🔥 Match Details - " + match.getSquad1());
             
             String textContent = String.format(
