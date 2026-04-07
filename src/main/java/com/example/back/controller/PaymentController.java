@@ -53,7 +53,6 @@ public class PaymentController {
         
         JSONObject requestBody = new JSONObject();
         requestBody.put("order_id", orderId);
-        // Registration fee
         requestBody.put("order_amount", 110.0);
         requestBody.put("order_currency", "INR");
         
