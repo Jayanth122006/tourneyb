@@ -53,8 +53,8 @@ public class PaymentController {
         
         JSONObject requestBody = new JSONObject();
         requestBody.put("order_id", orderId);
-        // TEMPORARILY set to 1.0 for testing. Change back to 110.0 later!
-        requestBody.put("order_amount", 1.0);
+        // Registration fee
+        requestBody.put("order_amount", 110.0);
         requestBody.put("order_currency", "INR");
         
         JSONObject customerDetails = new JSONObject();
